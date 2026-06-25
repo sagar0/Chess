@@ -1,0 +1,11 @@
+# Build artifacts
+chess
+*.o
+*.a
+*.so
+*.dylib
+
+# Debug / IDE
+*.dSYM/
+.vscode/
+.idea/
