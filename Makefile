@@ -8,21 +8,25 @@ else
 CXXFLAGS += -O2
 endif
 
-SRCS := src/Board.cpp \
+SRCS := src/main.cpp src/Board.cpp \
         src/pieces/Pawn.cpp src/pieces/Rook.cpp src/pieces/Knight.cpp \
         src/pieces/Bishop.cpp src/pieces/Queen.cpp src/pieces/King.cpp
 
 OBJS := $(SRCS:.cpp=.o)
+TARGET := chess
 
 .PHONY: all run clean
 
-all: $(OBJS)
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $^
 
 src/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-run:
-	@echo "Link the chess binary after main.cpp is added."
+run: $(TARGET)
+	./$(TARGET)
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJS) $(TARGET)
