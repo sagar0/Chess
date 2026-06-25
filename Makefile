@@ -8,17 +8,21 @@ else
 CXXFLAGS += -O2
 endif
 
-.PHONY: all run clean compile-check
+SRCS := src/Board.cpp \
+        src/pieces/Pawn.cpp src/pieces/Rook.cpp src/pieces/Knight.cpp \
+        src/pieces/Bishop.cpp src/pieces/Queen.cpp src/pieces/King.cpp
 
-all: compile-check
+OBJS := $(SRCS:.cpp=.o)
 
-compile-check: include/Types.hpp
-	@printf '#include "Types.hpp"\nint main(){Position p{};(void)p;return 0;}\n' | \
-		$(CXX) $(CXXFLAGS) -x c++ -c - -o .types-smoke.o
-	@rm -f .types-smoke.o
+.PHONY: all run clean
+
+all: $(OBJS)
+
+src/%.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 run:
-	@echo "Chess binary not built yet. Continue the commit sequence."
+	@echo "Link the chess binary after main.cpp is added."
 
 clean:
-	@rm -f .types-smoke.o
+	rm -f $(OBJS)
