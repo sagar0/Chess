@@ -62,6 +62,10 @@ int main() {
         if (board.isInCheck(board.currentTurn())) {
             std::cout << "Check!\n";
         }
+        board.printLastMove(std::cout);
+        if (board.lastMove().has_value()) {
+            std::cout << '\n';
+        }
         std::cout << "Your move (e.g. e2 e4 or e7 e8 Q): ";
         std::cout.flush();
 
@@ -93,10 +97,12 @@ int main() {
 
         const auto promoted = board.lastPromotion();
         if (promoted.has_value()) {
-            std::cout << "Moved. Promoted to " << pieceTypeName(*promoted) << ".\n\n";
+            std::cout << "Moved. Promoted to " << pieceTypeName(*promoted) << ".\n";
         } else {
-            std::cout << "Moved.\n\n";
+            std::cout << "Moved.\n";
         }
+        board.printLastMove(std::cout);
+        std::cout << "\n\n";
     }
 
     if (isGameOver(board.gameState())) {

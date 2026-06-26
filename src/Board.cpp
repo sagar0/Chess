@@ -86,6 +86,8 @@ void Board::setupStandardPosition() {
     }
 
     currentTurn_ = Color::White;
+    moveHistory_.clear();
+    lastPromotion_.reset();
 }
 
 void Board::print(std::ostream& out) const {
@@ -289,6 +291,21 @@ std::optional<Color> Board::winner() const {
     return currentTurn_ == Color::White ? Color::Black : Color::White;
 }
 
+std::optional<Move> Board::lastMove() const {
+    if (moveHistory_.empty()) {
+        return std::nullopt;
+    }
+    return moveHistory_.back();
+}
+
+void Board::printLastMove(std::ostream& out) const {
+    const auto move = lastMove();
+    if (!move.has_value()) {
+        return;
+    }
+    out << "Last move: " << colorName(move->color) << " " << move->toAlgebraic();
+}
+
 std::optional<std::string> Board::tryMove(Position from,
                                           Position to,
                                           std::optional<PieceType> promotion) {
@@ -336,6 +353,15 @@ std::optional<std::string> Board::tryMove(Position from,
         return "Only pawns can promote on the last rank.";
     }
 
+    const Move recordedMove{
+        currentTurn_,
+        from,
+        to,
+        movingPiece->type(),
+        target != nullptr ? std::optional<PieceType>{target->type()} : std::nullopt,
+        promotionType,
+    };
+
     grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
         std::move(grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)]);
     grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] = nullptr;
@@ -346,6 +372,7 @@ std::optional<std::string> Board::tryMove(Position from,
         lastPromotion_ = *promotionType;
     }
 
+    moveHistory_.push_back(recordedMove);
     currentTurn_ = currentTurn_ == Color::White ? Color::Black : Color::White;
     return std::nullopt;
 }

@@ -50,3 +50,39 @@ TEST(PositionTest, AlgebraicRoundTrip) {
     EXPECT_EQ(*pos, (Position{4, 4}));
     EXPECT_EQ(pos->toAlgebraic(), "e4");
 }
+
+TEST(BoardTest, RecordsMoveHistoryAfterLegalMove) {
+    Board board;
+    board.setupStandardPosition();
+    EXPECT_TRUE(board.moveHistory().empty());
+    EXPECT_FALSE(board.lastMove().has_value());
+
+    const auto e2 = Position::fromAlgebraic("e2");
+    const auto e4 = Position::fromAlgebraic("e4");
+    ASSERT_TRUE(e2.has_value());
+    ASSERT_TRUE(e4.has_value());
+
+    ASSERT_FALSE(board.tryMove(*e2, *e4).has_value());
+    ASSERT_EQ(board.moveHistory().size(), 1U);
+
+    const auto last = board.lastMove();
+    ASSERT_TRUE(last.has_value());
+    EXPECT_EQ(last->color, Color::White);
+    EXPECT_EQ(last->piece, PieceType::Pawn);
+    EXPECT_EQ(last->from, *e2);
+    EXPECT_EQ(last->to, *e4);
+    EXPECT_FALSE(last->captured.has_value());
+    EXPECT_EQ(last->toAlgebraic(), "e2 e4");
+}
+
+TEST(MoveTest, FormatsPromotionNotation) {
+    const Move move{
+        Color::White,
+        {1, 2},
+        {0, 2},
+        PieceType::Pawn,
+        std::nullopt,
+        PieceType::Queen,
+    };
+    EXPECT_EQ(move.toAlgebraic(), "c7 c8 Q");
+}

@@ -3,6 +3,7 @@
 #include <cctype>
 #include <optional>
 #include <string>
+#include <vector>
 
 enum class Color { White, Black };
 
@@ -46,6 +47,39 @@ struct Position {
 inline std::string colorName(Color color) {
     return color == Color::White ? "White" : "Black";
 }
+
+inline char promotionChar(PieceType type) {
+    switch (type) {
+        case PieceType::Queen:
+            return 'Q';
+        case PieceType::Rook:
+            return 'R';
+        case PieceType::Bishop:
+            return 'B';
+        case PieceType::Knight:
+            return 'N';
+        default:
+            return '?';
+    }
+}
+
+struct Move {
+    Color color{};
+    Position from{};
+    Position to{};
+    PieceType piece{PieceType::None};
+    std::optional<PieceType> captured;
+    std::optional<PieceType> promotion;
+
+    std::string toAlgebraic() const {
+        std::string notation = from.toAlgebraic() + " " + to.toAlgebraic();
+        if (promotion.has_value()) {
+            notation.push_back(' ');
+            notation.push_back(promotionChar(*promotion));
+        }
+        return notation;
+    }
+};
 
 inline bool isPromotablePiece(PieceType type) {
     return type == PieceType::Queen || type == PieceType::Rook || type == PieceType::Knight ||
