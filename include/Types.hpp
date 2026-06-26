@@ -11,6 +11,13 @@ enum class PieceType { Pawn, Rook, Knight, Bishop, Queen, King, None };
 
 enum class GameState { InProgress, Checkmate, Stalemate };
 
+struct CastlingRights {
+    bool whiteKingside{true};
+    bool whiteQueenside{true};
+    bool blackKingside{true};
+    bool blackQueenside{true};
+};
+
 struct Position {
     int row{};
     int col{};
@@ -46,6 +53,10 @@ struct Position {
 
 inline std::string colorName(Color color) {
     return color == Color::White ? "White" : "Black";
+}
+
+inline int pawnDirection(Color color) {
+    return color == Color::White ? -1 : 1;
 }
 
 inline char promotionChar(PieceType type) {

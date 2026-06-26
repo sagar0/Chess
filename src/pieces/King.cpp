@@ -18,6 +18,10 @@ bool King::isValidMove(const Board& board, Position from, Position to) const {
     const int rowDelta = std::abs(to.row - from.row);
     const int colDelta = std::abs(to.col - from.col);
 
+    if (rowDelta == 0 && colDelta == 2) {
+        return board.isCastlingStructureValid(from, to, color());
+    }
+
     if (rowDelta > 1 || colDelta > 1) {
         return false;
     }

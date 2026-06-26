@@ -86,3 +86,70 @@ TEST(MoveTest, FormatsPromotionNotation) {
     };
     EXPECT_EQ(move.toAlgebraic(), "c7 c8 Q");
 }
+
+TEST(BoardTest, WhiteKingsideCastle) {
+    Board board;
+    board.setupStandardPosition();
+
+    const auto tryAlgebraic = [&](const char* from, const char* to) {
+        const auto fromPos = Position::fromAlgebraic(from);
+        const auto toPos = Position::fromAlgebraic(to);
+        ASSERT_TRUE(fromPos.has_value());
+        ASSERT_TRUE(toPos.has_value());
+        ASSERT_FALSE(board.tryMove(*fromPos, *toPos).has_value());
+    };
+
+    tryAlgebraic("e2", "e4");
+    tryAlgebraic("e7", "e5");
+    tryAlgebraic("g1", "f3");
+    tryAlgebraic("b8", "c6");
+    tryAlgebraic("f1", "c4");
+    tryAlgebraic("g8", "f6");
+    tryAlgebraic("e1", "g1");
+
+    const auto g1 = Position::fromAlgebraic("g1");
+    const auto f1 = Position::fromAlgebraic("f1");
+    const auto h1 = Position::fromAlgebraic("h1");
+    ASSERT_TRUE(g1.has_value());
+    ASSERT_TRUE(f1.has_value());
+    ASSERT_TRUE(h1.has_value());
+
+    ASSERT_NE(board.pieceAt(*g1), nullptr);
+    EXPECT_EQ(board.pieceAt(*g1)->type(), PieceType::King);
+    ASSERT_NE(board.pieceAt(*f1), nullptr);
+    EXPECT_EQ(board.pieceAt(*f1)->type(), PieceType::Rook);
+    EXPECT_EQ(board.pieceAt(*h1), nullptr);
+}
+
+TEST(BoardTest, EnPassantCaptureRemovesPassedPawn) {
+    Board board;
+    board.setupStandardPosition();
+
+    const auto tryAlgebraic = [&](const char* from, const char* to) {
+        const auto fromPos = Position::fromAlgebraic(from);
+        const auto toPos = Position::fromAlgebraic(to);
+        ASSERT_TRUE(fromPos.has_value());
+        ASSERT_TRUE(toPos.has_value());
+        ASSERT_FALSE(board.tryMove(*fromPos, *toPos).has_value());
+    };
+
+    tryAlgebraic("e2", "e4");
+    tryAlgebraic("c7", "c6");
+    tryAlgebraic("e4", "e5");
+    tryAlgebraic("d7", "d5");
+
+    const auto target = board.enPassantTarget();
+    ASSERT_TRUE(target.has_value());
+    EXPECT_EQ(target->toAlgebraic(), "d6");
+
+    tryAlgebraic("e5", "d6");
+
+    const auto d5 = Position::fromAlgebraic("d5");
+    const auto d6 = Position::fromAlgebraic("d6");
+    ASSERT_TRUE(d5.has_value());
+    ASSERT_TRUE(d6.has_value());
+    EXPECT_EQ(board.pieceAt(*d5), nullptr);
+    ASSERT_NE(board.pieceAt(*d6), nullptr);
+    EXPECT_EQ(board.pieceAt(*d6)->type(), PieceType::Pawn);
+    EXPECT_EQ(board.pieceAt(*d6)->color(), Color::White);
+}

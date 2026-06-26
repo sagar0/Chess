@@ -40,14 +40,25 @@ public:
     bool isEnemy(Position pos, Color color) const;
     bool isAlly(Position pos, Color color) const;
     bool isPathClear(Position from, Position to) const;
+    std::optional<Position> enPassantTarget() const { return enPassantTarget_; }
+    bool isCastlingStructureValid(Position from, Position to, Color color) const;
 
 private:
     std::array<std::array<std::unique_ptr<Piece>, 8>, 8> grid_{};
     Color currentTurn_{Color::White};
     std::optional<PieceType> lastPromotion_;
     std::vector<Move> moveHistory_;
+    CastlingRights castlingRights_{};
+    std::optional<Position> enPassantTarget_;
 
     void placePiece(PieceType type, Color color, Position pos);
+    bool isCastlingMove(Position from, Position to, Color color) const;
+    bool canCastle(Position from, Position to, Color color) const;
+    void applyCastling(Position from, Position to);
+    void updateCastlingRights(Position from, Position to, const Piece* movingPiece);
+    void updateEnPassantTarget(Position from, Position to, const Piece* movingPiece);
+    std::optional<Position> enPassantCapturedSquare(Position to, Color color) const;
+    bool isEnPassantCapture(Position from, Position to, Color color) const;
     bool isPseudoLegal(Position from, Position to, Color color) const;
     bool wouldLeaveKingInCheck(Position from,
                                Position to,

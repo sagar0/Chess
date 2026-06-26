@@ -15,7 +15,7 @@ bool Pawn::isValidMove(const Board& board, Position from, Position to) const {
         return false;
     }
 
-    const int direction = color() == Color::White ? -1 : 1;
+    const int direction = pawnDirection(color());
     const int startRow = color() == Color::White ? 6 : 1;
     const int rowDelta = to.row - from.row;
     const int colDelta = std::abs(to.col - from.col);
@@ -34,7 +34,11 @@ bool Pawn::isValidMove(const Board& board, Position from, Position to) const {
     }
 
     if (colDelta == 1 && rowDelta == direction) {
-        return board.isEnemy(to, color());
+        if (board.isEnemy(to, color())) {
+            return true;
+        }
+        const auto target = board.enPassantTarget();
+        return target.has_value() && *target == to && board.isEmpty(to);
     }
 
     return false;
