@@ -46,3 +46,38 @@ struct Position {
 inline std::string colorName(Color color) {
     return color == Color::White ? "White" : "Black";
 }
+
+inline bool isPromotablePiece(PieceType type) {
+    return type == PieceType::Queen || type == PieceType::Rook || type == PieceType::Knight ||
+           type == PieceType::Bishop;
+}
+
+inline std::optional<PieceType> pieceTypeFromPromotionChar(char ch) {
+    switch (static_cast<char>(std::toupper(ch))) {
+        case 'Q':
+            return PieceType::Queen;
+        case 'R':
+            return PieceType::Rook;
+        case 'B':
+            return PieceType::Bishop;
+        case 'N':
+            return PieceType::Knight;
+        default:
+            return std::nullopt;
+    }
+}
+
+inline std::string pieceTypeName(PieceType type) {
+    switch (type) {
+        case PieceType::Queen:
+            return "Queen";
+        case PieceType::Rook:
+            return "Rook";
+        case PieceType::Bishop:
+            return "Bishop";
+        case PieceType::Knight:
+            return "Knight";
+        default:
+            return "Piece";
+    }
+}

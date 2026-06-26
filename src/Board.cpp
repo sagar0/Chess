@@ -32,7 +32,32 @@ std::unique_ptr<Piece> makePiece(PieceType type, Color color) {
     return nullptr;
 }
 
+void promotePawnIfNeeded(std::unique_ptr<Piece>& piece, PieceType promotionType) {
+    if (piece != nullptr && piece->type() == PieceType::Pawn) {
+        piece = makePiece(promotionType, piece->color());
+    }
+}
+
 }  // namespace
+
+bool Board::isPawnPromotionSquare(Color color, int row) {
+    return (color == Color::White && row == 0) || (color == Color::Black && row == 7);
+}
+
+std::optional<PieceType> Board::resolvePromotion(const Piece* movingPiece,
+                                                 Position to,
+                                                 std::optional<PieceType> promotion) {
+    if (movingPiece == nullptr || movingPiece->type() != PieceType::Pawn ||
+        !isPawnPromotionSquare(movingPiece->color(), to.row)) {
+        return std::nullopt;
+    }
+
+    const PieceType promotionType = promotion.value_or(PieceType::Queen);
+    if (!isPromotablePiece(promotionType)) {
+        return std::nullopt;
+    }
+    return promotionType;
+}
 
 Board::Board() = default;
 
@@ -174,19 +199,46 @@ bool Board::isPseudoLegal(Position from, Position to, Color color) const {
     return movingPiece->isValidMove(*this, from, to);
 }
 
-bool Board::wouldLeaveKingInCheck(Position from, Position to, Color color) const {
+bool Board::wouldLeaveKingInCheck(Position from,
+                                  Position to,
+                                  Color color,
+                                  std::optional<PieceType> promotion) const {
     auto& self = const_cast<Board&>(*this);
+
+    const Piece* movingPiece = pieceAt(from);
+    if (movingPiece == nullptr) {
+        return true;
+    }
+
+    const PieceType originalType = movingPiece->type();
+    const Color pieceColor = movingPiece->color();
+    const auto promotionType = resolvePromotion(movingPiece, to, promotion);
 
     std::unique_ptr<Piece> captured =
         std::move(self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)]);
-    self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
+    std::unique_ptr<Piece> moving =
         std::move(self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)]);
-    self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] = nullptr;
+
+    if (promotionType.has_value()) {
+        self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
+            makePiece(*promotionType, pieceColor);
+    } else {
+        self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
+            std::move(moving);
+        moving = nullptr;
+    }
 
     const bool inCheck = self.isInCheck(color);
 
-    self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] =
-        std::move(self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)]);
+    if (promotionType.has_value()) {
+        self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)].reset();
+        self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] =
+            makePiece(originalType, pieceColor);
+    } else {
+        self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] =
+            std::move(self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)]);
+        self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] = nullptr;
+    }
     self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
         std::move(captured);
 
@@ -207,7 +259,10 @@ bool Board::hasLegalMoves(Color color) const {
                     if (!isPseudoLegal(from, to, color)) {
                         continue;
                     }
-                    if (!wouldLeaveKingInCheck(from, to, color)) {
+                    const Piece* pieceForPromotion = pieceAt(from);
+                    const auto promotion =
+                        resolvePromotion(pieceForPromotion, to, std::optional<PieceType>{PieceType::Queen});
+                    if (!wouldLeaveKingInCheck(from, to, color, promotion)) {
                         return true;
                     }
                 }
@@ -234,7 +289,11 @@ std::optional<Color> Board::winner() const {
     return currentTurn_ == Color::White ? Color::Black : Color::White;
 }
 
-std::optional<std::string> Board::tryMove(Position from, Position to) {
+std::optional<std::string> Board::tryMove(Position from,
+                                          Position to,
+                                          std::optional<PieceType> promotion) {
+    lastPromotion_.reset();
+
     if (!Position::isOnBoard(from) || !Position::isOnBoard(to)) {
         return "Square is off the board.";
     }
@@ -259,13 +318,33 @@ std::optional<std::string> Board::tryMove(Position from, Position to) {
     if (target != nullptr && target->type() == PieceType::King) {
         return "Cannot capture the king.";
     }
-    if (wouldLeaveKingInCheck(from, to, currentTurn_)) {
+    if (wouldLeaveKingInCheck(from, to, currentTurn_, promotion)) {
         return "You cannot move into or leave your king in check.";
+    }
+
+    movingPiece = pieceAt(from);
+    if (movingPiece == nullptr) {
+        return "No piece on the from-square.";
+    }
+
+    const auto promotionType = resolvePromotion(movingPiece, to, promotion);
+    if (movingPiece->type() == PieceType::Pawn && isPawnPromotionSquare(currentTurn_, to.row) &&
+        !promotionType.has_value()) {
+        return "Invalid promotion piece. Use Q, R, B, or N.";
+    }
+    if (promotion.has_value() && !promotionType.has_value()) {
+        return "Only pawns can promote on the last rank.";
     }
 
     grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
         std::move(grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)]);
     grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] = nullptr;
+
+    if (promotionType.has_value()) {
+        promotePawnIfNeeded(grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)],
+                            *promotionType);
+        lastPromotion_ = *promotionType;
+    }
 
     currentTurn_ = currentTurn_ == Color::White ? Color::Black : Color::White;
     return std::nullopt;

@@ -7,10 +7,17 @@
 
 namespace {
 
-std::optional<std::pair<Position, Position>> parseMove(const std::string& line) {
+struct ParsedMove {
+    Position from;
+    Position to;
+    std::optional<PieceType> promotion;
+};
+
+std::optional<ParsedMove> parseMove(const std::string& line) {
     std::istringstream input(line);
     std::string fromStr;
     std::string toStr;
+    std::string promotionStr;
 
     if (!(input >> fromStr >> toStr)) {
         return std::nullopt;
@@ -23,7 +30,18 @@ std::optional<std::pair<Position, Position>> parseMove(const std::string& line) 
         return std::nullopt;
     }
 
-    return std::pair<Position, Position>{*from, *to};
+    std::optional<PieceType> promotion;
+    if (input >> promotionStr) {
+        if (promotionStr.size() != 1) {
+            return std::nullopt;
+        }
+        promotion = pieceTypeFromPromotionChar(promotionStr[0]);
+        if (!promotion.has_value()) {
+            return std::nullopt;
+        }
+    }
+
+    return ParsedMove{*from, *to, promotion};
 }
 
 bool isGameOver(GameState state) {
@@ -36,7 +54,7 @@ int main() {
     Board board;
     board.setupStandardPosition();
 
-    std::cout << "Chess (text mode). Enter moves like \"e2 e4\", or \"quit\" to exit.\n\n";
+    std::cout << "Chess (text mode). Enter moves like \"e2 e4\" or \"e7 e8 Q\", or \"quit\" to exit.\n\n";
 
     while (!isGameOver(board.gameState())) {
         board.print(std::cout);
@@ -44,7 +62,7 @@ int main() {
         if (board.isInCheck(board.currentTurn())) {
             std::cout << "Check!\n";
         }
-        std::cout << "Your move (e.g. e2 e4): ";
+        std::cout << "Your move (e.g. e2 e4 or e7 e8 Q): ";
         std::cout.flush();
 
         std::string line;
@@ -63,17 +81,22 @@ int main() {
 
         const auto move = parseMove(line);
         if (!move.has_value()) {
-            std::cout << "Invalid input. Use two squares like \"e2 e4\".\n\n";
+            std::cout << "Invalid input. Use two squares like \"e2 e4\", optionally \"e7 e8 Q\".\n\n";
             continue;
         }
 
-        const auto error = board.tryMove(move->first, move->second);
+        const auto error = board.tryMove(move->from, move->to, move->promotion);
         if (error.has_value()) {
             std::cout << "Move rejected: " << *error << "\n\n";
             continue;
         }
 
-        std::cout << "Moved.\n\n";
+        const auto promoted = board.lastPromotion();
+        if (promoted.has_value()) {
+            std::cout << "Moved. Promoted to " << pieceTypeName(*promoted) << ".\n\n";
+        } else {
+            std::cout << "Moved.\n\n";
+        }
     }
 
     if (isGameOver(board.gameState())) {
