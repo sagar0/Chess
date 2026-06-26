@@ -21,6 +21,13 @@ public:
 
     [[nodiscard]] std::optional<std::string> tryMove(Position from, Position to);
 
+    std::optional<Position> findKing(Color color) const;
+    bool isSquareAttacked(Position sq, Color byColor) const;
+    bool isInCheck(Color color) const;
+    bool hasLegalMoves(Color color) const;
+    GameState gameState() const;
+    std::optional<Color> winner() const;
+
     bool isEmpty(Position pos) const;
     bool isEnemy(Position pos, Color color) const;
     bool isAlly(Position pos, Color color) const;
@@ -31,4 +38,6 @@ private:
     Color currentTurn_{Color::White};
 
     void placePiece(PieceType type, Color color, Position pos);
+    bool isPseudoLegal(Position from, Position to, Color color) const;
+    bool wouldLeaveKingInCheck(Position from, Position to, Color color) const;
 };

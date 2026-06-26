@@ -7,6 +7,7 @@
 #include "pieces/Queen.hpp"
 #include "pieces/Rook.hpp"
 
+#include <iostream>
 #include <utility>
 
 namespace {
@@ -121,6 +122,118 @@ bool Board::isPathClear(Position from, Position to) const {
     return true;
 }
 
+std::optional<Position> Board::findKing(Color color) const {
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+            const Piece* piece = pieceAt({row, col});
+            if (piece != nullptr && piece->type() == PieceType::King && piece->color() == color) {
+                return Position{row, col};
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+bool Board::isSquareAttacked(Position sq, Color byColor) const {
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+            const Position from{row, col};
+            const Piece* piece = pieceAt(from);
+            if (piece == nullptr || piece->color() != byColor) {
+                continue;
+            }
+            if (piece->isValidMove(*this, from, sq)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool Board::isInCheck(Color color) const {
+    const auto kingPos = findKing(color);
+    if (!kingPos.has_value()) {
+        return false;
+    }
+    const Color attacker = color == Color::White ? Color::Black : Color::White;
+    return isSquareAttacked(*kingPos, attacker);
+}
+
+bool Board::isPseudoLegal(Position from, Position to, Color color) const {
+    const Piece* movingPiece = pieceAt(from);
+    if (movingPiece == nullptr || movingPiece->color() != color) {
+        return false;
+    }
+    if (isAlly(to, color)) {
+        return false;
+    }
+    const Piece* target = pieceAt(to);
+    if (target != nullptr && target->type() == PieceType::King) {
+        return false;
+    }
+    return movingPiece->isValidMove(*this, from, to);
+}
+
+bool Board::wouldLeaveKingInCheck(Position from, Position to, Color color) const {
+    auto& self = const_cast<Board&>(*this);
+
+    std::unique_ptr<Piece> captured =
+        std::move(self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)]);
+    self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
+        std::move(self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)]);
+    self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] = nullptr;
+
+    const bool inCheck = self.isInCheck(color);
+
+    self.grid_[static_cast<std::size_t>(from.row)][static_cast<std::size_t>(from.col)] =
+        std::move(self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)]);
+    self.grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =
+        std::move(captured);
+
+    return inCheck;
+}
+
+bool Board::hasLegalMoves(Color color) const {
+    for (int fromRow = 0; fromRow < 8; ++fromRow) {
+        for (int fromCol = 0; fromCol < 8; ++fromCol) {
+            const Position from{fromRow, fromCol};
+            const Piece* piece = pieceAt(from);
+            if (piece == nullptr || piece->color() != color) {
+                continue;
+            }
+            for (int toRow = 0; toRow < 8; ++toRow) {
+                for (int toCol = 0; toCol < 8; ++toCol) {
+                    const Position to{toRow, toCol};
+                    if (!isPseudoLegal(from, to, color)) {
+                        continue;
+                    }
+                    if (!wouldLeaveKingInCheck(from, to, color)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+GameState Board::gameState() const {
+    if (hasLegalMoves(currentTurn_)) {
+        return GameState::InProgress;
+    }
+    if (isInCheck(currentTurn_)) {
+        return GameState::Checkmate;
+    }
+    return GameState::Stalemate;
+}
+
+std::optional<Color> Board::winner() const {
+    if (gameState() != GameState::Checkmate) {
+        return std::nullopt;
+    }
+    return currentTurn_ == Color::White ? Color::Black : Color::White;
+}
+
 std::optional<std::string> Board::tryMove(Position from, Position to) {
     if (!Position::isOnBoard(from) || !Position::isOnBoard(to)) {
         return "Square is off the board.";
@@ -141,6 +254,13 @@ std::optional<std::string> Board::tryMove(Position from, Position to) {
     }
     if (!movingPiece->isValidMove(*this, from, to)) {
         return "Illegal move for that piece.";
+    }
+    const Piece* target = pieceAt(to);
+    if (target != nullptr && target->type() == PieceType::King) {
+        return "Cannot capture the king.";
+    }
+    if (wouldLeaveKingInCheck(from, to, currentTurn_)) {
+        return "You cannot move into or leave your king in check.";
     }
 
     grid_[static_cast<std::size_t>(to.row)][static_cast<std::size_t>(to.col)] =

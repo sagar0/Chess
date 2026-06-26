@@ -26,6 +26,10 @@ std::optional<std::pair<Position, Position>> parseMove(const std::string& line) 
     return std::pair<Position, Position>{*from, *to};
 }
 
+bool isGameOver(GameState state) {
+    return state == GameState::Checkmate || state == GameState::Stalemate;
+}
+
 }  // namespace
 
 int main() {
@@ -34,9 +38,12 @@ int main() {
 
     std::cout << "Chess (text mode). Enter moves like \"e2 e4\", or \"quit\" to exit.\n\n";
 
-    while (true) {
+    while (!isGameOver(board.gameState())) {
         board.print(std::cout);
         std::cout << '\n' << colorName(board.currentTurn()) << " to move.\n";
+        if (board.isInCheck(board.currentTurn())) {
+            std::cout << "Check!\n";
+        }
         std::cout << "Your move (e.g. e2 e4): ";
         std::cout.flush();
 
@@ -67,6 +74,19 @@ int main() {
         }
 
         std::cout << "Moved.\n\n";
+    }
+
+    if (isGameOver(board.gameState())) {
+        board.print(std::cout);
+        std::cout << '\n';
+        if (board.gameState() == GameState::Checkmate) {
+            const auto winner = board.winner();
+            if (winner.has_value()) {
+                std::cout << "Checkmate! " << colorName(*winner) << " wins.\n";
+            }
+        } else {
+            std::cout << "Stalemate! The game is a draw.\n";
+        }
     }
 
     return 0;

@@ -8,6 +8,8 @@ enum class Color { White, Black };
 
 enum class PieceType { Pawn, Rook, Knight, Bishop, Queen, King, None };
 
+enum class GameState { InProgress, Checkmate, Stalemate };
+
 struct Position {
     int row{};
     int col{};
