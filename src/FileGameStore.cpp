@@ -3,41 +3,108 @@
 #include "Board.hpp"
 #include "GameSnapshot.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 
-FileGameStore::FileGameStore(std::string path) : path_(std::move(path)) {}
+namespace {
 
-bool FileGameStore::hasSavedGame() const {
-    return std::filesystem::exists(path_);
+std::string trim(const std::string& text) {
+    const auto start = text.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        return {};
+    }
+    const auto end = text.find_last_not_of(" \t\r\n");
+    return text.substr(start, end - start + 1);
 }
 
-std::optional<std::string> FileGameStore::save(const Board& board) {
-    const std::string data = serializeGameSnapshot(board.captureSnapshot());
+}  // namespace
 
-    const std::filesystem::path filePath(path_);
-    if (filePath.has_parent_path()) {
-        std::error_code error;
-        std::filesystem::create_directories(filePath.parent_path(), error);
-        if (error) {
-            return "Could not create save directory.";
+FileGameStore::FileGameStore(std::string saveDirectory)
+    : saveDirectory_(std::move(saveDirectory)) {}
+
+std::filesystem::path FileGameStore::pathForGame(const std::string& name) const {
+    return std::filesystem::path(saveDirectory_) / name;
+}
+
+std::vector<std::string> FileGameStore::listSavedGames() const {
+    std::vector<std::string> games;
+    const std::filesystem::path directory(saveDirectory_);
+    if (!std::filesystem::exists(directory)) {
+        return games;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            games.push_back(entry.path().filename().string());
         }
     }
 
-    std::ofstream out(path_, std::ios::trunc);
+    std::sort(games.begin(), games.end());
+    return games;
+}
+
+bool FileGameStore::hasSavedGames() const {
+    return !listSavedGames().empty();
+}
+
+std::optional<std::string> FileGameStore::validateGameName(const std::string& name) const {
+    const std::string trimmed = trim(name);
+    if (trimmed.empty()) {
+        return "Game name cannot be empty.";
+    }
+    if (trimmed.size() > 64) {
+        return "Game name is too long (64 characters max).";
+    }
+    if (trimmed == "." || trimmed == "..") {
+        return "Invalid game name.";
+    }
+    for (const char ch : trimmed) {
+        if (ch == '/' || ch == '\\') {
+            return "Game name cannot contain path separators.";
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> FileGameStore::save(const Board& board, const std::string& name) {
+    if (const auto nameError = validateGameName(name)) {
+        return nameError;
+    }
+
+    const std::string trimmed = trim(name);
+    const std::filesystem::path filePath = pathForGame(trimmed);
+
+    std::error_code error;
+    std::filesystem::create_directories(filePath.parent_path(), error);
+    if (error) {
+        return "Could not create save directory.";
+    }
+
+    std::ofstream out(filePath, std::ios::trunc);
     if (!out) {
         return "Could not open save file for writing.";
     }
-    out << data;
+    out << serializeGameSnapshot(board.captureSnapshot());
     if (!out) {
         return "Could not write save file.";
     }
     return std::nullopt;
 }
 
-std::optional<std::string> FileGameStore::load(Board& board) {
-    std::ifstream in(path_);
+std::optional<std::string> FileGameStore::load(Board& board, const std::string& name) {
+    if (const auto nameError = validateGameName(name)) {
+        return nameError;
+    }
+
+    const std::filesystem::path filePath = pathForGame(trim(name));
+    if (!std::filesystem::exists(filePath)) {
+        return "Saved game not found.";
+    }
+
+    std::ifstream in(filePath);
     if (!in) {
         return "Could not open save file for reading.";
     }
@@ -58,7 +125,11 @@ std::optional<std::string> FileGameStore::load(Board& board) {
     return std::nullopt;
 }
 
-void FileGameStore::clearSavedGame() {
+void FileGameStore::deleteSavedGame(const std::string& name) {
+    if (validateGameName(name).has_value()) {
+        return;
+    }
+
     std::error_code error;
-    std::filesystem::remove(path_, error);
+    std::filesystem::remove(pathForGame(trim(name)), error);
 }

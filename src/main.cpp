@@ -7,10 +7,11 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
-constexpr const char* kDefaultSavePath = ".chess/saved_game.txt";
+constexpr const char* kSaveDirectory = ".chess/saves";
 
 struct ParsedMove {
     Position from;
@@ -79,26 +80,96 @@ bool promptYesNo(const std::string& question) {
     }
 }
 
-void initializeBoard(Board& board, GameStore& store) {
-    if (store.hasSavedGame()) {
-        if (promptYesNo("A saved game was found. Continue where you left off? (y/n): ")) {
-            if (const auto error = store.load(board)) {
-                std::cout << "Could not load saved game: " << *error << "\n";
-                std::cout << "Starting a new game instead.\n\n";
-                board.setupStandardPosition();
-            } else {
-                std::cout << "Loaded saved game.\n\n";
-            }
-            return;
+std::optional<std::string> promptGameName(GameStore& store) {
+    while (true) {
+        std::cout << "Enter a name for this game: ";
+        std::cout.flush();
+
+        std::string line;
+        if (!std::getline(std::cin, line)) {
+            return std::nullopt;
         }
 
-        store.clearSavedGame();
-    }
+        if (const auto error = store.validateGameName(line)) {
+            std::cout << *error << '\n';
+            continue;
+        }
 
-    board.setupStandardPosition();
+        const auto start = line.find_first_not_of(" \t\r\n");
+        const auto end = line.find_last_not_of(" \t\r\n");
+        return line.substr(start, end - start + 1);
+    }
 }
 
-void offerSaveOnQuit(Board& board, GameStore& store) {
+std::optional<std::string> promptSelectSavedGame(GameStore& store) {
+    const std::vector<std::string> games = store.listSavedGames();
+    if (games.empty()) {
+        return std::nullopt;
+    }
+
+    std::cout << "Saved games:\n";
+    for (std::size_t i = 0; i < games.size(); ++i) {
+        std::cout << "  " << (i + 1) << ". " << games[i] << '\n';
+    }
+    std::cout << "\nEnter a number or name to continue, or press Enter for a new game: ";
+    std::cout.flush();
+
+    std::string line;
+    if (!std::getline(std::cin, line)) {
+        return std::nullopt;
+    }
+
+    if (line.empty()) {
+        return std::nullopt;
+    }
+
+    try {
+        const std::size_t index = static_cast<std::size_t>(std::stoul(line));
+        if (index >= 1 && index <= games.size()) {
+            return games[index - 1];
+        }
+    } catch (const std::exception&) {
+        // Not a number; try matching by name below.
+    }
+
+    for (const std::string& game : games) {
+        if (game == line) {
+            return game;
+        }
+    }
+
+    std::cout << "No saved game matched \"" << line << "\". Starting a new game.\n\n";
+    return std::nullopt;
+}
+
+void initializeBoard(Board& board, GameStore& store, std::optional<std::string>& activeGameName) {
+    activeGameName.reset();
+
+    if (!store.hasSavedGames()) {
+        board.setupStandardPosition();
+        return;
+    }
+
+    const std::optional<std::string> selected = promptSelectSavedGame(store);
+    if (!selected.has_value()) {
+        board.setupStandardPosition();
+        return;
+    }
+
+    if (const auto error = store.load(board, *selected)) {
+        std::cout << "Could not load \"" << *selected << "\": " << *error << "\n";
+        std::cout << "Starting a new game instead.\n\n";
+        board.setupStandardPosition();
+        return;
+    }
+
+    activeGameName = *selected;
+    std::cout << "Loaded \"" << *selected << "\".\n\n";
+}
+
+void offerSaveOnQuit(Board& board,
+                     GameStore& store,
+                     std::optional<std::string>& activeGameName) {
     if (board.gameState() != GameState::InProgress) {
         return;
     }
@@ -107,15 +178,21 @@ void offerSaveOnQuit(Board& board, GameStore& store) {
         return;
     }
 
-    if (const auto error = store.save(board)) {
+    const std::optional<std::string> name = promptGameName(store);
+    if (!name.has_value()) {
+        return;
+    }
+
+    if (const auto error = store.save(board, *name)) {
         std::cout << "Could not save game: " << *error << '\n';
         return;
     }
 
-    std::cout << "Game saved. You can continue it the next time you play.\n";
+    activeGameName = *name;
+    std::cout << "Game saved as \"" << *name << "\". You can continue it the next time you play.\n";
 }
 
-void runGameLoop(Board& board, GameStore& store) {
+void runGameLoop(Board& board, GameStore& store, std::optional<std::string>& activeGameName) {
     std::cout << "Chess (text mode). Enter moves like \"e2 e4\" or \"e7 e8 Q\", "
                  "\"history\" to list moves, or \"quit\" to exit.\n\n";
 
@@ -135,13 +212,13 @@ void runGameLoop(Board& board, GameStore& store) {
         std::string line;
         if (!std::getline(std::cin, line)) {
             std::cout << '\n';
-            offerSaveOnQuit(board, store);
+            offerSaveOnQuit(board, store, activeGameName);
             std::cout << "Goodbye.\n";
             break;
         }
 
         if (line == "quit" || line == "exit") {
-            offerSaveOnQuit(board, store);
+            offerSaveOnQuit(board, store, activeGameName);
             std::cout << "Goodbye.\n";
             break;
         }
@@ -187,16 +264,20 @@ void runGameLoop(Board& board, GameStore& store) {
         } else {
             std::cout << "Stalemate! The game is a draw.\n";
         }
-        store.clearSavedGame();
+        if (activeGameName.has_value()) {
+            store.deleteSavedGame(*activeGameName);
+            activeGameName.reset();
+        }
     }
 }
 
 }  // namespace
 
 int main() {
-    auto store = std::make_unique<FileGameStore>(kDefaultSavePath);
+    auto store = std::make_unique<FileGameStore>(kSaveDirectory);
+    std::optional<std::string> activeGameName;
     Board board;
-    initializeBoard(board, *store);
-    runGameLoop(board, *store);
+    initializeBoard(board, *store, activeGameName);
+    runGameLoop(board, *store, activeGameName);
     return 0;
 }

@@ -10,14 +10,14 @@
 
 namespace {
 
-std::string uniqueTempPath(const std::string& name) {
+std::string uniqueTempDir(const std::string& name) {
     const auto tempDir = std::filesystem::temp_directory_path();
     return (tempDir / name).string();
 }
 
-void removeIfExists(const std::string& path) {
+void removeDirectoryIfExists(const std::string& path) {
     std::error_code error;
-    std::filesystem::remove(path, error);
+    std::filesystem::remove_all(path, error);
 }
 
 void playAlgebraic(Board& board, const char* from, const char* to) {
@@ -71,23 +71,27 @@ TEST(GameSnapshotTest, RejectsInvalidSnapshotData) {
     EXPECT_TRUE(deserializeGameSnapshot("not a save file", snapshot).has_value());
 }
 
-TEST(FileGameStoreTest, SaveLoadAndClearPersistGame) {
-    const std::string path = uniqueTempPath("chess_save_test.txt");
-    removeIfExists(path);
+TEST(FileGameStoreTest, SaveLoadAndDeleteNamedGame) {
+    const std::string directory = uniqueTempDir("chess_saves_test");
+    removeDirectoryIfExists(directory);
 
     Board board;
     board.setupStandardPosition();
     playAlgebraic(board, "d2", "d4");
     playAlgebraic(board, "d7", "d5");
 
-    FileGameStore store(path);
-    ASSERT_FALSE(store.hasSavedGame());
-    ASSERT_FALSE(store.save(board).has_value());
-    ASSERT_TRUE(store.hasSavedGame());
+    FileGameStore store(directory);
+    ASSERT_FALSE(store.hasSavedGames());
+    ASSERT_FALSE(store.save(board, "opening").has_value());
+    ASSERT_TRUE(store.hasSavedGames());
+
+    const auto games = store.listSavedGames();
+    ASSERT_EQ(games.size(), 1U);
+    EXPECT_EQ(games[0], "opening");
 
     Board loaded;
     loaded.setupStandardPosition();
-    ASSERT_FALSE(store.load(loaded).has_value());
+    ASSERT_FALSE(store.load(loaded, "opening").has_value());
 
     EXPECT_EQ(loaded.currentTurn(), board.currentTurn());
     EXPECT_EQ(loaded.moveHistory().size(), board.moveHistory().size());
@@ -101,24 +105,86 @@ TEST(FileGameStoreTest, SaveLoadAndClearPersistGame) {
     EXPECT_EQ(loaded.pieceAt(*d4)->color(), Color::White);
     EXPECT_EQ(loaded.pieceAt(*d5)->color(), Color::Black);
 
-    store.clearSavedGame();
-    EXPECT_FALSE(store.hasSavedGame());
-    removeIfExists(path);
+    store.deleteSavedGame("opening");
+    EXPECT_FALSE(store.hasSavedGames());
+    removeDirectoryIfExists(directory);
 }
 
-TEST(FileGameStoreTest, LoadReportsInvalidSaveFile) {
-    const std::string path = uniqueTempPath("chess_invalid_save_test.txt");
-    removeIfExists(path);
+TEST(FileGameStoreTest, SupportsMultipleNamedSaves) {
+    const std::string directory = uniqueTempDir("chess_multi_saves_test");
+    removeDirectoryIfExists(directory);
 
+    FileGameStore store(directory);
+
+    Board gameA;
+    gameA.setupStandardPosition();
+    playAlgebraic(gameA, "e2", "e4");
+    ASSERT_FALSE(store.save(gameA, "e4-opening").has_value());
+
+    Board gameB;
+    gameB.setupStandardPosition();
+    playAlgebraic(gameB, "d2", "d4");
+    ASSERT_FALSE(store.save(gameB, "queens-gambit").has_value());
+
+    const auto games = store.listSavedGames();
+    ASSERT_EQ(games.size(), 2U);
+    EXPECT_EQ(games[0], "e4-opening");
+    EXPECT_EQ(games[1], "queens-gambit");
+
+    Board loadedA;
+    loadedA.setupStandardPosition();
+    ASSERT_FALSE(store.load(loadedA, "e4-opening").has_value());
+    ASSERT_EQ(loadedA.moveHistory().size(), 1U);
+    EXPECT_EQ(loadedA.moveHistory().front().toAlgebraic(), "e2 e4");
+
+    Board loadedB;
+    loadedB.setupStandardPosition();
+    ASSERT_FALSE(store.load(loadedB, "queens-gambit").has_value());
+    ASSERT_EQ(loadedB.moveHistory().size(), 1U);
+    EXPECT_EQ(loadedB.moveHistory().front().toAlgebraic(), "d2 d4");
+
+    removeDirectoryIfExists(directory);
+}
+
+TEST(FileGameStoreTest, RejectsInvalidGameNames) {
+    const std::string directory = uniqueTempDir("chess_name_validation_test");
+    removeDirectoryIfExists(directory);
+
+    FileGameStore store(directory);
+    Board board;
+    board.setupStandardPosition();
+
+    EXPECT_TRUE(store.validateGameName("").has_value());
+    EXPECT_TRUE(store.validateGameName("   ").has_value());
+    EXPECT_TRUE(store.validateGameName("bad/name").has_value());
+    EXPECT_TRUE(store.validateGameName("..").has_value());
+
+    EXPECT_TRUE(store.save(board, "").has_value());
+    EXPECT_TRUE(store.save(board, "bad/name").has_value());
+    EXPECT_FALSE(store.hasSavedGames());
+
+    removeDirectoryIfExists(directory);
+}
+
+TEST(FileGameStoreTest, LoadReportsMissingOrInvalidSaveFile) {
+    const std::string directory = uniqueTempDir("chess_invalid_save_test");
+    removeDirectoryIfExists(directory);
+
+    FileGameStore store(directory);
+    Board board;
+    board.setupStandardPosition();
+
+    EXPECT_TRUE(store.load(board, "missing-game").has_value());
+
+    ASSERT_FALSE(store.save(board, "broken").has_value());
+    const std::filesystem::path brokenPath =
+        std::filesystem::path(directory) / "broken";
     {
-        std::ofstream out(path);
+        std::ofstream out(brokenPath, std::ios::trunc);
         out << "corrupted save data\n";
     }
 
-    FileGameStore store(path);
-    Board board;
-    board.setupStandardPosition();
-    EXPECT_TRUE(store.load(board).has_value());
+    EXPECT_TRUE(store.load(board, "broken").has_value());
 
-    removeIfExists(path);
+    removeDirectoryIfExists(directory);
 }
