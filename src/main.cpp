@@ -54,7 +54,8 @@ int main() {
     Board board;
     board.setupStandardPosition();
 
-    std::cout << "Chess (text mode). Enter moves like \"e2 e4\" or \"e7 e8 Q\", or \"quit\" to exit.\n\n";
+    std::cout << "Chess (text mode). Enter moves like \"e2 e4\" or \"e7 e8 Q\", "
+                 "\"history\" to list moves, or \"quit\" to exit.\n\n";
 
     while (!isGameOver(board.gameState())) {
         board.print(std::cout);
@@ -78,6 +79,11 @@ int main() {
         if (line == "quit" || line == "exit") {
             std::cout << "Goodbye.\n";
             break;
+        }
+        if (line == "history") {
+            board.printMoveHistory(std::cout);
+            std::cout << "\n\n";
+            continue;
         }
         if (line.empty()) {
             continue;

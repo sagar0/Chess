@@ -521,6 +521,20 @@ void Board::printLastMove(std::ostream& out) const {
     out << "Last move: " << colorName(move->color) << " " << move->toAlgebraic();
 }
 
+void Board::printMoveHistory(std::ostream& out) const {
+    if (moveHistory_.empty()) {
+        out << "No moves yet.";
+        return;
+    }
+    for (std::size_t i = 0; i < moveHistory_.size(); ++i) {
+        const Move& move = moveHistory_[i];
+        out << (i + 1) << ". " << colorName(move.color) << " " << move.toAlgebraic();
+        if (i + 1 < moveHistory_.size()) {
+            out << '\n';
+        }
+    }
+}
+
 std::optional<std::string> Board::tryMove(Position from,
                                           Position to,
                                           std::optional<PieceType> promotion) {

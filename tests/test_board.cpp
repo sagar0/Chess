@@ -2,6 +2,7 @@
 #include "Types.hpp"
 
 #include <gtest/gtest.h>
+#include <sstream>
 
 namespace {
 
@@ -73,6 +74,76 @@ TEST(BoardTest, RecordsMoveHistoryAfterLegalMove) {
     EXPECT_EQ(last->to, *e4);
     EXPECT_FALSE(last->captured.has_value());
     EXPECT_EQ(last->toAlgebraic(), "e2 e4");
+}
+
+TEST(BoardTest, PrintMoveHistoryWhenEmpty) {
+    Board board;
+    board.setupStandardPosition();
+
+    std::ostringstream out;
+    board.printMoveHistory(out);
+    EXPECT_EQ(out.str(), "No moves yet.");
+}
+
+TEST(BoardTest, PrintMoveHistoryListsMovesInOrder) {
+    Board board;
+    board.setupStandardPosition();
+
+    const auto tryAlgebraic = [&](const char* from, const char* to) {
+        const auto fromPos = Position::fromAlgebraic(from);
+        const auto toPos = Position::fromAlgebraic(to);
+        ASSERT_TRUE(fromPos.has_value());
+        ASSERT_TRUE(toPos.has_value());
+        ASSERT_FALSE(board.tryMove(*fromPos, *toPos).has_value());
+    };
+
+    tryAlgebraic("e2", "e4");
+    tryAlgebraic("e7", "e5");
+    tryAlgebraic("g1", "f3");
+
+    std::ostringstream out;
+    board.printMoveHistory(out);
+    EXPECT_EQ(out.str(),
+              "1. White e2 e4\n"
+              "2. Black e7 e5\n"
+              "3. White g1 f3");
+}
+
+TEST(BoardTest, RejectedMoveNotRecordedInHistory) {
+    Board board;
+    board.setupStandardPosition();
+
+    const auto e2 = Position::fromAlgebraic("e2");
+    const auto e5 = Position::fromAlgebraic("e5");
+    ASSERT_TRUE(e2.has_value());
+    ASSERT_TRUE(e5.has_value());
+
+    EXPECT_TRUE(board.tryMove(*e2, *e5).has_value());
+    EXPECT_TRUE(board.moveHistory().empty());
+    EXPECT_FALSE(board.lastMove().has_value());
+
+    std::ostringstream out;
+    board.printMoveHistory(out);
+    EXPECT_EQ(out.str(), "No moves yet.");
+}
+
+TEST(BoardTest, SetupStandardPositionClearsMoveHistory) {
+    Board board;
+    board.setupStandardPosition();
+
+    const auto e2 = Position::fromAlgebraic("e2");
+    const auto e4 = Position::fromAlgebraic("e4");
+    ASSERT_TRUE(e2.has_value());
+    ASSERT_TRUE(e4.has_value());
+    ASSERT_FALSE(board.tryMove(*e2, *e4).has_value());
+    ASSERT_EQ(board.moveHistory().size(), 1U);
+
+    board.setupStandardPosition();
+    EXPECT_TRUE(board.moveHistory().empty());
+
+    std::ostringstream out;
+    board.printMoveHistory(out);
+    EXPECT_EQ(out.str(), "No moves yet.");
 }
 
 TEST(MoveTest, FormatsPromotionNotation) {

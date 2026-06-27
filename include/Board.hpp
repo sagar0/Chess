@@ -35,6 +35,7 @@ public:
     const std::vector<Move>& moveHistory() const { return moveHistory_; }
     std::optional<Move> lastMove() const;
     void printLastMove(std::ostream& out) const;
+    void printMoveHistory(std::ostream& out) const;
 
     bool isEmpty(Position pos) const;
     bool isEnemy(Position pos, Color color) const;
