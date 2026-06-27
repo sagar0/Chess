@@ -56,7 +56,7 @@ flowchart LR
     boardClass --> legal
     boardClass --> special
     boardClass --> state
-    pieceBase <|-- concrete
+    pieceBase -->|extends| concrete
     boardClass -->|"delegates isValidMove"| pieceBase
     main -->|"print board, last move"| boardClass
 ```
