@@ -1,5 +1,6 @@
 CXX      := c++
-CXXFLAGS := -std=c++20 -Wall -Wextra -Wpedantic -Iinclude
+# -fPIC is required so core objects can be linked into the Python shared module on Linux.
+CXXFLAGS := -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -fPIC
 LDFLAGS  :=
 
 GTEST_CXXFLAGS := -I/opt/homebrew/include
@@ -83,7 +84,7 @@ cli/%.o: cli/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 bindings/%.o: bindings/%.cpp
-	$(CXX) $(CXXFLAGS) $(PYTHON_INCLUDES) -fPIC -c -o $@ $<
+	$(CXX) $(CXXFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
 
 tests/%.o: tests/%.cpp
 	$(CXX) $(CXXFLAGS) $(GTEST_CXXFLAGS) -c -o $@ $<
