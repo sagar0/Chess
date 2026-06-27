@@ -5,6 +5,9 @@ chess
 *.so
 *.dylib
 
+# Saved games
+.chess/
+
 # Debug / IDE
 *.dSYM/
 .vscode/

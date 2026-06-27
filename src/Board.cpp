@@ -96,6 +96,54 @@ void Board::setupStandardPosition() {
     enPassantTarget_.reset();
 }
 
+GameSnapshot Board::captureSnapshot() const {
+    GameSnapshot snapshot;
+    snapshot.currentTurn = currentTurn_;
+    snapshot.castlingRights = castlingRights_;
+    snapshot.enPassantTarget = enPassantTarget_;
+    snapshot.moveHistory = moveHistory_;
+
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+            SquareOccupant& square =
+                snapshot.grid[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)];
+            const Piece* piece = pieceAt({row, col});
+            if (piece == nullptr) {
+                square = SquareOccupant{};
+            } else {
+                square.type = piece->type();
+                square.color = piece->color();
+            }
+        }
+    }
+
+    return snapshot;
+}
+
+void Board::restoreSnapshot(const GameSnapshot& snapshot) {
+    for (auto& row : grid_) {
+        for (auto& square : row) {
+            square.reset();
+        }
+    }
+
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+            const SquareOccupant& square =
+                snapshot.grid[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)];
+            if (square.type != PieceType::None) {
+                placePiece(square.type, square.color, {row, col});
+            }
+        }
+    }
+
+    currentTurn_ = snapshot.currentTurn;
+    castlingRights_ = snapshot.castlingRights;
+    enPassantTarget_ = snapshot.enPassantTarget;
+    moveHistory_ = snapshot.moveHistory;
+    lastPromotion_.reset();
+}
+
 void Board::print(std::ostream& out) const {
     out << "  a b c d e f g h\n";
     for (int row = 0; row < 8; ++row) {

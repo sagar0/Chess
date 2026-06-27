@@ -2,6 +2,7 @@
 
 #include "Piece.hpp"
 #include "Types.hpp"
+#include "GameSnapshot.hpp"
 
 #include <array>
 #include <memory>
@@ -43,6 +44,9 @@ public:
     bool isPathClear(Position from, Position to) const;
     std::optional<Position> enPassantTarget() const { return enPassantTarget_; }
     bool isCastlingStructureValid(Position from, Position to, Color color) const;
+
+    GameSnapshot captureSnapshot() const;
+    void restoreSnapshot(const GameSnapshot& snapshot);
 
 private:
     std::array<std::array<std::unique_ptr<Piece>, 8>, 8> grid_{};
