@@ -4,6 +4,8 @@ chess
 *.a
 *.so
 *.dylib
+bindings/chess_engine*.so
+bindings/chess_engine*.dylib
 
 # Saved games
 .chess/
