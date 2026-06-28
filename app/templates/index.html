@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Engine</title>
+  <link rel="stylesheet"
+        href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --border: #2a3140;
+      --text: #e8ecf3;
+      --muted: #9aa6bd;
+      --accent: #6ea8fe;
+      --error: #ff7b72;
+      --ok: #7ee787;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at top, #1a2030 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+
+    .layout {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+      display: grid;
+      grid-template-columns: minmax(280px, 520px) 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.75rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0 0 1.25rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .board-panel,
+    .side-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+
+    .board-panel {
+      padding: 1rem;
+    }
+
+    #board {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .side-panel {
+      padding: 1rem 1.1rem;
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .status strong {
+      color: var(--text);
+    }
+
+    #console {
+      flex: 1;
+      min-height: 360px;
+      margin: 0;
+      padding: 0.9rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0c0e13;
+      color: #c9d1d9;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .log-ok {
+      color: var(--ok);
+    }
+
+    .log-error {
+      color: var(--error);
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <section>
+      <h1>Chess Engine</h1>
+      <p class="subtitle">Native C++ core via pybind11 · FastAPI presentation layer</p>
+      <div class="board-panel">
+        <div id="board"></div>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <div class="status">
+        <div>Turn: <strong id="turn">White</strong></div>
+        <div>State: <strong id="game-state">InProgress</strong></div>
+        <div>Check: <strong id="in-check">No</strong></div>
+      </div>
+      <pre id="console" aria-live="polite"></pre>
+    </aside>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script>
+    const consoleEl = document.getElementById("console");
+    const turnEl = document.getElementById("turn");
+    const gameStateEl = document.getElementById("game-state");
+    const inCheckEl = document.getElementById("in-check");
+
+    function log(message, kind = "info") {
+      const line = document.createElement("div");
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      if (kind === "ok") line.className = "log-ok";
+      if (kind === "error") line.className = "log-error";
+      consoleEl.appendChild(line);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function updateStatus(data) {
+      if (data.turn) turnEl.textContent = data.turn;
+      if (data.game_state) gameStateEl.textContent = data.game_state;
+      inCheckEl.textContent = data.in_check ? "Yes" : "No";
+    }
+
+    async function submitMove(source, target) {
+      const response = await fetch("/api/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: source, to: target }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    const board = Chessboard("board", {
+      draggable: true,
+      position: "start",
+      pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+      onDrop(source, target) {
+        if (source === target) {
+          return;
+        }
+
+        const previousPosition = board.position();
+
+        submitMove(source, target)
+          .then((data) => {
+            updateStatus(data);
+            if (data.success) {
+              board.position(data.position);
+              log(`Accepted ${source} → ${target}. Turn: ${data.turn}.`, "ok");
+              if (data.board) {
+                log(data.board);
+              }
+            } else {
+              board.position(previousPosition);
+              log(`Rejected ${source} → ${target}: ${data.error}`, "error");
+            }
+          })
+          .catch((error) => {
+            board.position(previousPosition);
+            log(`Request failed for ${source} → ${target}: ${error.message}`, "error");
+          });
+
+        return "snapback";
+      },
+    });
+
+    log("Board ready. Drag a piece to play.");
+  </script>
+</body>
+</html>
